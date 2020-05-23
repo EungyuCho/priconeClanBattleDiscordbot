@@ -1,13 +1,15 @@
 import asyncio
 import discord
 import re
-
+import io
 client = discord.Client()
 
 # 토큰정보를 불러옵니다. (같이 메일에 보낸 토큰정보 파일을 최상위폴더와 같은 위치에 넣어주세요(Kyarubot 폴더 밖에)
 f = open("../../staticImformation", "r")
+# f = open("../../staticImformation2", "r")
 token = f.readline()    #토큰정보를 로드해서 token 변수에 저장합니다
 f.close()
+
 
 battleCount = 0 #전투중인 유저변수입니다
 innerPeople = [] #전투에 들어가있는 유저정보가 들어가있는 배열입니다
@@ -40,30 +42,35 @@ async def on_ready():
     print("Logged in as ") #화면에 봇의 아이디, 닉네임이 출력됩니다.
     print(client.user.name)
     print(client.user.id)
-    # 디스코드에는 현재 본인이 어떤 게임을 플레이하는지 보여주는 기능이 있습니다.
     # 이 기능을 사용하여 봇의 상태를 간단하게 출력해줄 수 있습니다.
     # await client.change_presence(game=discord.Game(name="반갑습니다 :D", type=1))
+    # 디스코드에는 현재 본인이 어떤 게임을 플레이하는지 보여주는 기능이 있습니다.
 
 # 봇이 새로운 메시지를 수신했을때 동작되는 코드입니다.
 @client.event
 async def on_message(message):
-    chan = message.channel
+    chan = message.channel #chan이라는 변수에는 메시지를 받은 채널의 ID를 담습니다.
     global battleCount
     global innerPeople
     global bossHp
     global bossName
-    if message.author.bot: #만약 메시지를 보낸사람이 봇일 경우에는
+    con = message.content #메세지를 con 변수에 할당합니다
+
+    userinfo = message.author #메세지를 보낸 유저의정보를 가져옵니다(봇도 포함)
+    displayName = '';
+    if userinfo.nick is None:
+        displayName = userinfo.name
+    else:
+        displayName = userinfo.nick
+
+    if userinfo.bot: #만약 메시지를 보낸사람이 봇일 경우에는
         return None #동작하지 않고 무시합니다.
-
-    id = message.author.id #id라는 변수에는 메시지를 보낸사람의 ID를 담습니다.
-    channel = message.channel #channel이라는 변수에는 메시지를 받은 채널의 ID를 담습니다.
-
-    strIdCode = str(id)
-
+    
+    
     #도움말 기능입니다. embed를 출력합니다.
-    if message.content.startswith('!도움말'):
+    if con.startswith('!도움말'):
         embed = discord.embeds.Embed(title='클랜배틀 도움용 봇입니다.', description='개선사항또는 문의사항이 있으면 랜서에게 문의해주세요!', color=0x8080ff)
-        embed.set_author('name=프리코네 간판 캬루쟝')
+        embed.set_author(name='프리코네 간판 캬루쟝')
         embed.set_thumbnail(url="https://ifh.cc/g/FMHeeT.jpg")
         embed.add_field(name='(명령어)', value='(설명)', inline=False)
         embed.add_field(name='!입장', value='보스에 입장 전 입력해주시면 돼요!', inline=False)
@@ -75,60 +82,80 @@ async def on_message(message):
         embed.add_field(name='!딜링', value='보스가 안죽었을때 딜링시 적어주세요! Ex) !딜링 2만', inline=False)
         await  chan.send(embed=embed)
 
-    elif message.content.startswith('!입장'):
-        if(message.author in innerPeople):
-            await chan.send(str(message.author) +'님은 이미 입장하셨어요!')
+    elif con.startswith('!입장'):
+        if(userinfo in innerPeople):
+            await chan.send(str(displayName) +'님은 이미 입장하셨어요!')
         else:
             battleCount += 1
-            innerPeople.append(message.author)
-            await chan.send(str(message.author) +'님이 전투에 입장하셨어요!')
+            innerPeople.append(userinfo)
+            print(message)
+            print(userinfo)
+            await chan.send(str(displayName) +'님이 전투에 입장하셨어요!')
 
-    elif message.content.startswith('!퇴장'):
-        if(message.author in innerPeople):
+    elif con.startswith('!퇴장'):
+        if(userinfo in innerPeople):
             battleCount -= 1
-            innerPeople.remove(message.author)
-            await chan.send(str(message.author) +'님이 퇴장하셨어요!')
+            innerPeople.remove(userinfo)
+            await chan.send(str(displayName) +'님이 퇴장하셨어요!')
         else:
-            await  chan.send(str(message.author) +'님은 아직 입장하지 않았어요!')
+            await  chan.send(str(displayName) +'님은 아직 입장하지 않았어요!')
 
-    elif message.content.startswith('!현재인원'):
+    elif con.startswith('!현재인원'):
         await  chan.send('현재 입장인원은 ' + str(len(innerPeople)) + '명 이에요!')
 
-    elif message.content.startswith('!정보입력'):
-        bossInfo = message.content
-        infoArr = bossInfo.split('/')
-        if(len(infoArr)==2):
-            bossName = str(infoArr[0]).replace('!정보입력', '').replace(' ', '')
-            bossHp = str(infoArr[1]).replace(' ', '')
-            await  chan.send('정보입력이 완료되었어요!~')
-        else:
+    elif con.startswith('!정보입력'):
+        try:
+            bossInfo = con
+            infoArr = bossInfo.split('/')
+            if(len(infoArr)==2):
+                bossName = str(infoArr[0]).replace('!정보입력', '').replace(' ', '')
+                bossHp = str(infoArr[1]).replace(' ', '')
+                await  chan.send('정보입력이 완료되었어요!~')
+            else:
+                await  chan.send('입력이 잘못되었어요! Ex) !정보입력 4넴/135만')
+        except IndexError :
             await  chan.send('입력이 잘못되었어요! Ex) !정보입력 4넴/135만')
 
-    elif message.content.startswith('!보스'):
+    elif con.startswith('!보스'):
         await  chan.send('현재 보스는 ' + bossName + '이고, 체력은 ' + bossHp + '남았어요! 힘내요~!')
 
-    elif message.content.startswith('!딜링'):
-        beforeHp = re.findall('\d+', str(bossHp))
-        deal = re.findall('\d+', str(message.content))
-        remainHp = int(beforeHp[0]) - int(deal[0])
-        if(remainHp<0):
-            await  chan.send('!정보입력 을 사용해서 다음보스 정보를 입력해주세요!')
-        else:
-            bossHp = str(int(beforeHp[0]) - int(deal[0])) + '만'
-            await  chan.send('보스의 체력이' + bossHp + '만큼 남았어요!')
-
-    elif message.content.startswith('!전투중유저'):
+    elif con.startswith('!딜링'):
+        try:
+            beforeHp = re.findall('\d+', str(bossHp))
+            deal = re.findall('\d+', str(con))
+            remainHp = int(beforeHp[0]) - int(deal[0])
+            if(remainHp<0):
+                await  chan.send('!정보입력 을 사용해서 다음보스 정보를 입력해주세요!')
+            else:
+                bossHp = str(int(beforeHp[0]) - int(deal[0])) + '만'
+                await  chan.send('보스의 체력이' + bossHp + '만큼 남았어요!')
+        except IndexError :
+            await  chan.send('!딜링 딜량을 입력해주세요! Ex) !딜링 86만')
+    elif con.startswith('!전투중유저'):
         if(innerPeople.__len__()==0):
             await  chan.send('현재 입장중인 인원이 없어요!')
         elif(innerPeople.__len__()==1):
-            await  chan.send('현재 ' +str(innerPeople[0].name) + '님이 입장해있어요!')
+
+            people = ''
+            for person in innerPeople:
+                if person.nick is None:
+                    people += str(person.name) + ', '
+                else:
+                    people += str(person.nick) + ', '
+
+            await  chan.send('현재 ' + replaceRight(people, ',', '', 1) + '님이 입장해있어요!')
+            # if innerPeople[0].nick is None:
+            #     await  chan.send('현재 ' +str(innerPeople[0].name) + '님이 입장해있어요!')
+            # else:
+            #     await  chan.send('현재 ' +str(innerPeople[0].nick) + '님이 입장해있어요!')
         else:
             people = ''
             for person in innerPeople:
-                people += str(person.name) +', '
+                if person.nick is None:
+                    people += str(person.name) +', '
+                else:
+                    people += str(person.nick) + ', '
+
             await  chan.send('현재 ' + replaceRight(people, ',', '', 1) + '님이 입장해있어요!')
-
-
-
 
 client.run(token)
